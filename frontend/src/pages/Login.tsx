@@ -11,11 +11,21 @@ const Login: React.FC = () => {
     email: '',
     password: '',
   });
+  const [errors, setErrors] = useState({
+    email: '',
+    password: '',
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    // Clear error for this field when user starts typing
+    if (errors[name as keyof typeof errors]) {
+      setErrors({ ...errors, [name]: '' });
+    }
   };
 
   const validateEmail = (email: string): boolean => {
@@ -26,20 +36,30 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setErrors({ email: '', password: '' });
+
+    let hasError = false;
+    const newErrors = { email: '', password: '' };
 
     // Validation
-    if (!formData.email || !formData.password) {
-      setError('All fields are required');
-      return;
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+      hasError = true;
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+      hasError = true;
     }
 
-    if (!validateEmail(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+      hasError = true;
+    } else if (formData.password.length < 4) {
+      newErrors.password = 'Password must be at least 4 characters';
+      hasError = true;
     }
 
-    if (formData.password.length < 4) {
-      setError('Password must be at least 4 characters');
+    if (hasError) {
+      setErrors(newErrors);
       return;
     }
 
@@ -49,8 +69,9 @@ const Login: React.FC = () => {
       const response = await authApi.login(formData.email, formData.password);
       login(response.token, response.user);
       navigate('/vacations');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -71,7 +92,9 @@ const Login: React.FC = () => {
               value={formData.email}
               onChange={handleChange}
               disabled={loading}
+              className={errors.email ? 'input-error' : ''}
             />
+            {errors.email && <div className="field-error">{errors.email}</div>}
           </div>
           <div className="form-group">
             <label htmlFor="password">password</label>
@@ -82,7 +105,9 @@ const Login: React.FC = () => {
               value={formData.password}
               onChange={handleChange}
               disabled={loading}
+              className={errors.password ? 'input-error' : ''}
             />
+            {errors.password && <div className="field-error">{errors.password}</div>}
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}

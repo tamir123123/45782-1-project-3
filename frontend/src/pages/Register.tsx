@@ -13,11 +13,23 @@ const Register: React.FC = () => {
     email: '',
     password: '',
   });
+  const [errors, setErrors] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    // Clear error for this field when user starts typing
+    if (errors[name as keyof typeof errors]) {
+      setErrors({ ...errors, [name]: '' });
+    }
   };
 
   const validateEmail = (email: string): boolean => {
@@ -28,20 +40,40 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setErrors({ firstName: '', lastName: '', email: '', password: '' });
+
+    let hasError = false;
+    const newErrors = { firstName: '', lastName: '', email: '', password: '' };
 
     // Validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-      setError('All fields are required');
-      return;
+    if (!formData.firstName) {
+      newErrors.firstName = 'First name is required';
+      hasError = true;
     }
 
-    if (!validateEmail(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
+    if (!formData.lastName) {
+      newErrors.lastName = 'Last name is required';
+      hasError = true;
     }
 
-    if (formData.password.length < 4) {
-      setError('Password must be at least 4 characters');
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+      hasError = true;
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+      hasError = true;
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+      hasError = true;
+    } else if (formData.password.length < 4) {
+      newErrors.password = 'Password must be at least 4 characters';
+      hasError = true;
+    }
+
+    if (hasError) {
+      setErrors(newErrors);
       return;
     }
 
@@ -73,7 +105,9 @@ const Register: React.FC = () => {
               value={formData.firstName}
               onChange={handleChange}
               disabled={loading}
+              className={errors.firstName ? 'input-error' : ''}
             />
+            {errors.firstName && <div className="field-error">{errors.firstName}</div>}
           </div>
           <div className="form-group">
             <label htmlFor="lastName">last name</label>
@@ -84,7 +118,9 @@ const Register: React.FC = () => {
               value={formData.lastName}
               onChange={handleChange}
               disabled={loading}
+              className={errors.lastName ? 'input-error' : ''}
             />
+            {errors.lastName && <div className="field-error">{errors.lastName}</div>}
           </div>
           <div className="form-group">
             <label htmlFor="email">email</label>
@@ -95,7 +131,9 @@ const Register: React.FC = () => {
               value={formData.email}
               onChange={handleChange}
               disabled={loading}
+              className={errors.email ? 'input-error' : ''}
             />
+            {errors.email && <div className="field-error">{errors.email}</div>}
           </div>
           <div className="form-group">
             <label htmlFor="password">password</label>
@@ -106,7 +144,9 @@ const Register: React.FC = () => {
               value={formData.password}
               onChange={handleChange}
               disabled={loading}
+              className={errors.password ? 'input-error' : ''}
             />
+            {errors.password && <div className="field-error">{errors.password}</div>}
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Registering...' : 'Register'}
