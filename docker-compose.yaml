@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  database:
+    container_name: vacations-db
+    build: ./database
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+      - MYSQL_DATABASE=vacations
+      - MYSQL_TCP_PORT=3306
+    ports:
+      - "3306:3306"
+    volumes:
+      - vacations-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    container_name: vacations-backend
+    build: ./backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_NAME=vacations
+      - DB_USER=root
+      - DB_PASSWORD=
+      - JWT_SECRET=your-production-secret-key-change-this
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+  frontend:
+    container_name: vacations-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  vacations-data:
