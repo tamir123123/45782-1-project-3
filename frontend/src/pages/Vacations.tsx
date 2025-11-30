@@ -43,8 +43,11 @@ const Vacations: React.FC = () => {
 
     socket.on('vacation-update', (data: { vacationId: number; action: string }) => {
       console.log('Vacation update received:', data);
-      // Refresh vacations when any update occurs
-      fetchVacations();
+      // For follow/unfollow, ignore socket updates since we refetch in handleFollow/handleUnfollow
+      // Only refetch for add/edit/delete actions
+      if (data.action !== 'follow' && data.action !== 'unfollow') {
+        fetchVacations();
+      }
     });
 
     return () => {
@@ -54,8 +57,10 @@ const Vacations: React.FC = () => {
 
   const handleFollow = async (id: string) => {
     try {
+      const scrollY = window.scrollY;
       await vacationsApi.follow(id);
-      fetchVacations();
+      await fetchVacations();
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
     } catch (error) {
       console.error('Error following vacation:', error);
     }
@@ -63,8 +68,10 @@ const Vacations: React.FC = () => {
 
   const handleUnfollow = async (id: string) => {
     try {
+      const scrollY = window.scrollY;
       await vacationsApi.unfollow(id);
-      fetchVacations();
+      await fetchVacations();
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
     } catch (error) {
       console.error('Error unfollowing vacation:', error);
     }

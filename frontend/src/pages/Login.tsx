@@ -82,11 +82,11 @@ const Login: React.FC = () => {
       <div className="auth-card">
         <h1 className="auth-title">Login</h1>
         {error && <div className="error-message">{error}</div>}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label htmlFor="email">email</label>
             <input
-              type="email"
+              type="text"
               id="email"
               name="email"
               value={formData.email}
