@@ -19,12 +19,28 @@ const Vacations: React.FC = () => {
     notStarted: false,
     active: false,
   });
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
 
   const fetchVacations = async () => {
     setLoading(true);
     try {
       const response = await vacationsApi.getAll({ page, ...filters });
-      setVacations(response.vacations);
+
+      // Merge server data with local storage changes
+      const localFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      const mergedVacations = response.vacations.map((vacation: Vacation) => {
+        const localUpdate = localFollows[vacation.vacationId.toString()];
+        if (localUpdate) {
+          return {
+            ...vacation,
+            isFollowing: localUpdate.isFollowing,
+            followersCount: (vacation.followersCount || 0) + localUpdate.delta,
+          };
+        }
+        return vacation;
+      });
+
+      setVacations(mergedVacations);
       setTotalPages(response.totalPages);
     } catch (error) {
       console.error('Error fetching vacations:', error);
@@ -43,37 +59,141 @@ const Vacations: React.FC = () => {
 
     socket.on('vacation-update', (data: { vacationId: number; action: string }) => {
       console.log('Vacation update received:', data);
-      // For follow/unfollow, ignore socket updates since we refetch in handleFollow/handleUnfollow
-      // Only refetch for add/edit/delete actions
-      if (data.action !== 'follow' && data.action !== 'unfollow') {
-        fetchVacations();
+
+      // Check if this is our own action that we just made
+      const actionKey = `${data.action}-${data.vacationId}`;
+      if (pendingActions.has(actionKey)) {
+        // This is our own action, ignore the socket update
+        console.log('Ignoring own action:', actionKey);
+        return;
       }
+
+      // This is someone else's action, refetch to show updates
+      fetchVacations();
     });
 
     return () => {
       socket.off('vacation-update');
     };
-  }, [page, filters]);
+  }, [page, filters, pendingActions]);
 
   const handleFollow = async (id: string) => {
     try {
-      const scrollY = window.scrollY;
+      // Mark this action as pending to ignore the socket update
+      const actionKey = `follow-${id}`;
+      setPendingActions((prev) => new Set(prev).add(actionKey));
+
+      // Update UI immediately from local storage
+      const localFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      localFollows[id] = { isFollowing: true, delta: 1 };
+      localStorage.setItem('vacationFollows', JSON.stringify(localFollows));
+
+      // Update state immediately
+      setVacations((prev) =>
+        prev.map((v) =>
+          v.vacationId === id
+            ? { ...v, isFollowing: true, followersCount: (v.followersCount || 0) + 1 }
+            : v
+        )
+      );
+
+      // Send request to server in background
       await vacationsApi.follow(id);
-      await fetchVacations();
-      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+
+      // Clear local storage for this vacation after successful server update
+      const updatedFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      delete updatedFollows[id];
+      localStorage.setItem('vacationFollows', JSON.stringify(updatedFollows));
+
+      // Remove from pending actions after a delay to ensure socket event is processed
+      setTimeout(() => {
+        setPendingActions((prev) => {
+          const next = new Set(prev);
+          next.delete(actionKey);
+          return next;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error following vacation:', error);
+      // Revert UI on error
+      setVacations((prev) =>
+        prev.map((v) =>
+          v.vacationId === id
+            ? { ...v, isFollowing: false, followersCount: (v.followersCount || 1) - 1 }
+            : v
+        )
+      );
+      // Remove from local storage
+      const localFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      delete localFollows[id];
+      localStorage.setItem('vacationFollows', JSON.stringify(localFollows));
+      // Remove from pending actions
+      const actionKey = `follow-${id}`;
+      setPendingActions((prev) => {
+        const next = new Set(prev);
+        next.delete(actionKey);
+        return next;
+      });
     }
   };
 
   const handleUnfollow = async (id: string) => {
     try {
-      const scrollY = window.scrollY;
+      // Mark this action as pending to ignore the socket update
+      const actionKey = `unfollow-${id}`;
+      setPendingActions((prev) => new Set(prev).add(actionKey));
+
+      // Update UI immediately from local storage
+      const localFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      localFollows[id] = { isFollowing: false, delta: -1 };
+      localStorage.setItem('vacationFollows', JSON.stringify(localFollows));
+
+      // Update state immediately
+      setVacations((prev) =>
+        prev.map((v) =>
+          v.vacationId === id
+            ? { ...v, isFollowing: false, followersCount: (v.followersCount || 1) - 1 }
+            : v
+        )
+      );
+
+      // Send request to server in background
       await vacationsApi.unfollow(id);
-      await fetchVacations();
-      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+
+      // Clear local storage for this vacation after successful server update
+      const updatedFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      delete updatedFollows[id];
+      localStorage.setItem('vacationFollows', JSON.stringify(updatedFollows));
+
+      // Remove from pending actions after a delay to ensure socket event is processed
+      setTimeout(() => {
+        setPendingActions((prev) => {
+          const next = new Set(prev);
+          next.delete(actionKey);
+          return next;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error unfollowing vacation:', error);
+      // Revert UI on error
+      setVacations((prev) =>
+        prev.map((v) =>
+          v.vacationId === id
+            ? { ...v, isFollowing: true, followersCount: (v.followersCount || 0) + 1 }
+            : v
+        )
+      );
+      // Remove from local storage
+      const localFollows = JSON.parse(localStorage.getItem('vacationFollows') || '{}');
+      delete localFollows[id];
+      localStorage.setItem('vacationFollows', JSON.stringify(localFollows));
+      // Remove from pending actions
+      const actionKey = `unfollow-${id}`;
+      setPendingActions((prev) => {
+        const next = new Set(prev);
+        next.delete(actionKey);
+        return next;
+      });
     }
   };
 
